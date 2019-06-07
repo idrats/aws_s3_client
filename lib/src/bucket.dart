@@ -107,6 +107,52 @@ class Bucket extends Client {
     } while (isTruncated);
   }
 
+  /// Uploads file stream. Returns Etag.
+  Future<String> uploadFileStream(String key, Stream<List<int>> fileStream,
+      String contentType, int contentLength, Permissions permissions,
+      {Map<String, String> meta}) async {
+    print('??????????????');
+    var broadcast = StreamController<List<int>>.broadcast();
+    fileStream.listen((val) {
+      broadcast.add(val);
+      print(val.length);
+      print('----------');
+    });
+    wait15sec().then((_) => broadcast.sink.close());
+    Digest contentSha256 = await sha256.bind(broadcast.stream).first;
+    print('!!!!!!!!!!!!!!!!!');
+
+    String uriStr = endpointUrl + '/' + key;
+    http.Request request = new http.Request('PUT', Uri.parse(uriStr),
+        headers: new http.Headers(), body: broadcast.stream);
+    if (meta != null) {
+      for (MapEntry<String, String> me in meta.entries) {
+        request.headers.add("x-amz-meta-${me.key}", me.value);
+      }
+    }
+    if (permissions == Permissions.public) {
+      request.headers.add('x-amz-acl', 'public-read');
+    }
+    request.headers.add('Content-Length', contentLength);
+    request.headers.add('Content-Type', contentType);
+    signRequest(request, contentSha256: contentSha256);
+    http.Response response = await httpClient.send(request);
+
+    BytesBuilder builder = new BytesBuilder(copy: false);
+    await response.body.forEach(builder.add);
+    String body = utf8.decode(builder.toBytes()); // Should be empty when OK
+    if (response.statusCode != 200) {
+      throw new ClientException(response.statusCode, response.reasonPhrase,
+          response.headers.toSimpleMap(), body);
+    }
+    String etag = response.headers['etag'].first;
+    return etag;
+  }
+
+  Future wait15sec() async {
+    await Future.delayed(Duration(seconds: 15));
+  }
+
   /// Uploads file. Returns Etag.
   Future<String> uploadFile(
       String key, String filePath, String contentType, Permissions permissions,
