@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:aws_s3_client/aws_s3.dart';
 
 main() async {
@@ -18,8 +19,10 @@ main() async {
   }
   Bucket bucket = spaces.bucket('yourBucket');
 
+  File file = new File('README.md');
+
   String etag = await bucket.uploadFile(
-      'test/test.md', 'README.md', 'text/plain', Permissions.public);
+      'test/test.md', file.readAsBytesSync(), 'text/plain', Permissions.public);
   print('upload: $etag');
 
   print('done');
