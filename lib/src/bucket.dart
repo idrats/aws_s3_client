@@ -113,6 +113,7 @@ class Bucket extends Client {
   Future<String> uploadFileStream(String key, Stream<List<int>> fileStream,
       String contentType, int contentLength, Permissions permissions,
       {Map<String, String> meta}) async {
+    // int chunkSize = 155894;
     int chunkSize = 65536;
     bool isFirstChunk = true;
     String signature;
@@ -165,6 +166,11 @@ class Bucket extends Client {
         signature = calculateChunkedSignature(data, signature);
       }
       print(data.length);
+      print((data.length.toRadixString(16).toString() +
+              ";chunk-signature=$signature\r\n" +
+              (data.isEmpty ? '' : data.toString()) +
+              "\r\n")
+          .length);
       print('******************');
       request = new http.Request('PUT', uri,
           body: data.length.toRadixString(16).toString() +
@@ -175,10 +181,7 @@ class Bucket extends Client {
       try {
         await httpClient.send(request);
       } catch (e, s) {
-        if (i == 0) {
-          print(e);
-        }
-        print(s);
+        print(e.toString().length > 200 ? e.toString().substring(0, 200) : e);
       }
     }
 
