@@ -77,7 +77,8 @@ class Client {
   }
 
   @protected
-  String signRequest(http.Request request, {Digest contentSha256, int expires = 86400}) {
+  String signRequest(http.Request request,
+      {Digest contentSha256, int expires = 86400}) {
     // Build canonical request
     String httpMethod = request.method;
     String canonicalURI = request.uri.path;
@@ -98,7 +99,8 @@ class Client {
     /*dateIso8601 = "20130524T000000Z";
     dateYYYYMMDD = "20130524";
     hashedPayload = null;*/
-    String hashedPayloadStr = contentSha256 == null ? 'UNSIGNED-PAYLOAD' : '$contentSha256';
+    String hashedPayloadStr =
+        contentSha256 == null ? 'UNSIGNED-PAYLOAD' : '$contentSha256';
 
     String credential =
         '${accessKey}/${dateYYYYMMDD}/${region}/${service}/aws4_request';
@@ -106,7 +108,8 @@ class Client {
     Map<String, List<String>> headers = new Map<String, List<String>>();
     request.headers.add('x-amz-date', dateIso8601); // Set date in header
     if (contentSha256 != null) {
-      request.headers.add('x-amz-content-sha256', hashedPayloadStr); // Set payload hash in header
+      request.headers.add('x-amz-content-sha256',
+          hashedPayloadStr); // Set payload hash in header
     }
     request.headers.keys.forEach(
         (String name) => (headers[name.toLowerCase()] = request.headers[name]));
@@ -120,9 +123,9 @@ class Client {
     String signedHeaders = headerNames.join(';');
 
     // Build canonical query string
-    Map<String, String> queryParameters = new Map<String, String>()..addAll(request.uri.queryParameters);
-    List<String> queryKeys = queryParameters.keys.toList()
-      ..sort();
+    Map<String, String> queryParameters = new Map<String, String>()
+      ..addAll(request.uri.queryParameters);
+    List<String> queryKeys = queryParameters.keys.toList()..sort();
     String canonicalQueryString = queryKeys
         .map((s) => '${_uriEncode(s)}=${_uriEncode(queryParameters[s])}')
         .join('&');
@@ -156,5 +159,201 @@ class Client {
         'AWS4-HMAC-SHA256 Credential=${credential}, SignedHeaders=${signedHeaders}, Signature=$signature');
 
     return null;
+  }
+
+  @protected
+  String signFirstChunkRequest(http.Request request,
+      {Digest contentSha256, int expires = 86400}) {
+    // Build canonical request
+    String httpMethod = request.method;
+    String canonicalURI = request.uri.path;
+    String host = request.uri.host;
+    // String service = 's3';
+
+    DateTime date = new DateTime.now().toUtc();
+    String dateIso8601 = date.toIso8601String();
+    dateIso8601 = dateIso8601
+            .substring(0, dateIso8601.indexOf('.'))
+            .replaceAll(':', '')
+            .replaceAll('-', '') +
+        'Z';
+    String dateYYYYMMDD = date.year.toString().padLeft(4, '0') +
+        date.month.toString().padLeft(2, '0') +
+        date.day.toString().padLeft(2, '0');
+
+    /*dateIso8601 = "20130524T000000Z";
+    dateYYYYMMDD = "20130524";
+    hashedPayload = null;*/
+    String hashedPayloadStr = contentSha256 == null
+        ? 'STREAMING-AWS4-HMAC-SHA256-PAYLOAD'
+        : '$contentSha256';
+
+    String credential =
+        '${accessKey}/${dateYYYYMMDD}/${region}/${service}/aws4_request';
+    // Build canonical headers string
+    Map<String, List<String>> headers = new Map<String, List<String>>();
+    request.headers.add('x-amz-date', dateIso8601); // Set date in header
+    request.headers.add(
+        'x-amz-content-sha256', hashedPayloadStr); // Set payload hash in header
+    request.headers.keys.forEach(
+        (String name) => (headers[name.toLowerCase()] = request.headers[name]));
+    headers['host'] = [host]; // Host is a builtin header
+    List<String> headerNames = headers.keys.toList()..sort();
+    String canonicalHeaders = headerNames
+        .map((s) =>
+            (headers[s].map((v) => ('${s}:${_trimAll(v)}')).join('\n') + '\n'))
+        .join();
+
+    String signedHeaders = headerNames.join(';');
+
+    // Build canonical query string
+    Map<String, String> queryParameters = new Map<String, String>()
+      ..addAll(request.uri.queryParameters);
+    List<String> queryKeys = queryParameters.keys.toList()..sort();
+    String canonicalQueryString = queryKeys
+        .map((s) => '${_uriEncode(s)}=${_uriEncode(queryParameters[s])}')
+        .join('&');
+
+    // Sign headers
+    String canonicalRequest =
+        '${httpMethod}\n${canonicalURI}\n${canonicalQueryString}\n${canonicalHeaders}\n${signedHeaders}\n$hashedPayloadStr';
+    // print('\n>>>>>> canonical request \n' + canonicalRequest + '\n<<<<<<\n');
+
+    Digest canonicalRequestHash = sha256.convert(utf8.encode(
+        canonicalRequest)); //_hmacSha256.convert(utf8.encode(canonicalRequest));
+
+    String stringToSign =
+        'AWS4-HMAC-SHA256\n${dateIso8601}\n${dateYYYYMMDD}/${region}/${service}/aws4_request\n$canonicalRequestHash';
+    // print('\n>>>>>> string to sign \n' + stringToSign + '\n<<<<<<\n');
+
+    Digest dateKey = new Hmac(sha256, utf8.encode("AWS4${secretKey}"))
+        .convert(utf8.encode(dateYYYYMMDD));
+    Digest dateRegionKey =
+        new Hmac(sha256, dateKey.bytes).convert(utf8.encode(region));
+    Digest dateRegionServiceKey =
+        new Hmac(sha256, dateRegionKey.bytes).convert(utf8.encode(service));
+    Digest signingKey = new Hmac(sha256, dateRegionServiceKey.bytes)
+        .convert(utf8.encode("aws4_request"));
+
+    Digest signature =
+        new Hmac(sha256, signingKey.bytes).convert(utf8.encode(stringToSign));
+
+    // Set signature in header
+    request.headers.add('Authorization',
+        'AWS4-HMAC-SHA256 Credential=${credential}, SignedHeaders=${signedHeaders}, Signature=$signature');
+
+    return '$signature';
+  }
+
+  // @protected
+  // Map<String, dynamic> composeChunkRequestHeaders(
+  //     Map<String, dynamic> requestHeaders, Uri uri) {
+  //   // Build canonical request
+  //   String httpMethod = 'PUT';
+  //   String canonicalURI = uri.path;
+  //   String host = uri.host;
+
+  //   DateTime date = new DateTime.now().toUtc();
+  //   String dateIso8601 = date.toIso8601String();
+  //   dateIso8601 = dateIso8601
+  //           .substring(0, dateIso8601.indexOf('.'))
+  //           .replaceAll(':', '')
+  //           .replaceAll('-', '') +
+  //       'Z';
+  //   String dateYYYYMMDD = date.year.toString().padLeft(4, '0') +
+  //       date.month.toString().padLeft(2, '0') +
+  //       date.day.toString().padLeft(2, '0');
+
+  //   /*dateIso8601 = "20130524T000000Z";
+  //   dateYYYYMMDD = "20130524";*/
+  //   String credential =
+  //       '${accessKey}/${dateYYYYMMDD}/${region}/${service}/aws4_request';
+  //   Map<String, dynamic> resultHeaders = {
+  //     'x-amz-date': dateIso8601, // Set date in header
+  //     'x-amz-content-sha256':
+  //         'STREAMING-AWS4-HMAC-SHA256-PAYLOAD' // Set payload hash in header
+  //   };
+
+  //   // Build canonical headers string
+  //   Map<String, List<String>> headers = new Map<String, List<String>>();
+  //   requestHeaders.keys.forEach(
+  //       (String name) => (headers[name.toLowerCase()] = requestHeaders[name]));
+  //   headers['host'] = [host]; // Host is a builtin header
+  //   List<String> headerNames = headers.keys.toList()..sort();
+  //   String canonicalHeaders = headerNames
+  //       .map((s) =>
+  //           (headers[s].map((v) => ('${s}:${_trimAll(v)}')).join('\n') + '\n'))
+  //       .join();
+
+  //   String signedHeaders = headerNames.join(';');
+
+  //   // Build canonical query string
+  //   Map<String, String> queryParameters = new Map<String, String>()
+  //     ..addAll(uri.queryParameters);
+  //   List<String> queryKeys = queryParameters.keys.toList()..sort();
+  //   String canonicalQueryString = queryKeys
+  //       .map((s) => '${_uriEncode(s)}=${_uriEncode(queryParameters[s])}')
+  //       .join('&');
+
+  //   // Sign headers
+  //   String canonicalRequest =
+  //       '${httpMethod}\n${canonicalURI}\n${canonicalQueryString}\n${canonicalHeaders}\n${signedHeaders}\nSTREAMING-AWS4-HMAC-SHA256-PAYLOAD';
+  //   // print('\n>>>>>> canonical request \n' + canonicalRequest + '\n<<<<<<\n');
+
+  //   Digest canonicalRequestHash = sha256.convert(utf8.encode(
+  //       canonicalRequest)); //_hmacSha256.convert(utf8.encode(canonicalRequest));
+
+  //   String stringToSign =
+  //       'AWS4-HMAC-SHA256\n${dateIso8601}\n${dateYYYYMMDD}/${region}/${service}/aws4_request\n$canonicalRequestHash';
+  //   // print('\n>>>>>> string to sign \n' + stringToSign + '\n<<<<<<\n');
+
+  //   Digest dateKey = new Hmac(sha256, utf8.encode("AWS4${secretKey}"))
+  //       .convert(utf8.encode(dateYYYYMMDD));
+  //   Digest dateRegionKey =
+  //       new Hmac(sha256, dateKey.bytes).convert(utf8.encode(region));
+  //   Digest dateRegionServiceKey =
+  //       new Hmac(sha256, dateRegionKey.bytes).convert(utf8.encode(service));
+  //   Digest signingKey = new Hmac(sha256, dateRegionServiceKey.bytes)
+  //       .convert(utf8.encode("aws4_request"));
+
+  //   Digest signature =
+  //       new Hmac(sha256, signingKey.bytes).convert(utf8.encode(stringToSign));
+
+  //   // Set signature in header
+  //   resultHeaders['Authorization'] =
+  //       'AWS4-HMAC-SHA256 Credential=${credential}, SignedHeaders=${signedHeaders}, Signature=$signature';
+
+  //   return resultHeaders;
+  // }
+
+  String calculateChunkedSignature(List<int> data, String prevSignature) {
+    DateTime date = new DateTime.now().toUtc();
+    String dateIso8601 = date.toIso8601String();
+    dateIso8601 = dateIso8601
+            .substring(0, dateIso8601.indexOf('.'))
+            .replaceAll(':', '')
+            .replaceAll('-', '') +
+        'Z';
+    String dateYYYYMMDD = date.year.toString().padLeft(4, '0') +
+        date.month.toString().padLeft(2, '0') +
+        date.day.toString().padLeft(2, '0');
+
+    String stringToSign =
+        'AWS4-HMAC-SHA256\n${dateIso8601}\n${dateYYYYMMDD}/${region}/${service}/aws4_request\n$prevSignature\n${sha256.convert([])}\n${sha256.convert(data)})}';
+    // print('\n>>>>>> string to sign \n' + stringToSign + '\n<<<<<<\n');
+
+    Digest dateKey = new Hmac(sha256, utf8.encode("AWS4${secretKey}"))
+        .convert(utf8.encode(dateYYYYMMDD));
+    Digest dateRegionKey =
+        new Hmac(sha256, dateKey.bytes).convert(utf8.encode(region));
+    Digest dateRegionServiceKey =
+        new Hmac(sha256, dateRegionKey.bytes).convert(utf8.encode(service));
+    Digest signingKey = new Hmac(sha256, dateRegionServiceKey.bytes)
+        .convert(utf8.encode("aws4_request"));
+
+    Digest signature =
+        new Hmac(sha256, signingKey.bytes).convert(utf8.encode(stringToSign));
+
+    return '$signature';
   }
 }

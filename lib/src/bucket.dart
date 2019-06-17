@@ -107,51 +107,131 @@ class Bucket extends Client {
     } while (isTruncated);
   }
 
+  int i = 0;
+
   /// Uploads file stream. Returns Etag.
   Future<String> uploadFileStream(String key, Stream<List<int>> fileStream,
       String contentType, int contentLength, Permissions permissions,
       {Map<String, String> meta}) async {
-    print('??????????????');
-    var broadcast = StreamController<List<int>>.broadcast();
-    fileStream.listen((val) {
-      broadcast.add(val);
-      print(val.length);
-      print('----------');
-    });
-    wait15sec().then((_) => broadcast.sink.close());
-    Digest contentSha256 = await sha256.bind(broadcast.stream).first;
-    print('!!!!!!!!!!!!!!!!!');
+    int chunkSize = 65536;
+    bool isFirstChunk = true;
+    String signature;
+    Uri uri = Uri.parse(endpointUrl + '/' + key);
+    int contentLengthWithMeta =
+        calculateContentLengthWithMeta(contentLength, chunkSize);
+    // Map<String, dynamic> headers = {
+    //   'Content-Encoding': 'aws-chunked',
+    //   'Content-Type': contentType,
+    //   'Content-Length': contentLengthWithMeta,
+    //   'x-amz-decoded-content-length': contentLength
+    // };
+    // if (meta != null) {
+    //   for (MapEntry<String, String> me in meta.entries) {
+    //     headers["x-amz-meta-${me.key}"] = me.value;
+    //   }
+    // }
+    // if (permissions == Permissions.public) {
+    //   headers['x-amz-acl'] = 'public-read';
+    // }
+    // print(headers);
+    // final signedHeaders = composeChunkRequestHeaders(headers, uri);
+    // String canonicalRequestSignature =
+    //     (headers['Authorization'] as String).split('Signature=').last;
+    // print(signedHeaders);
+    // print(canonicalRequestSignature);
 
-    String uriStr = endpointUrl + '/' + key;
-    http.Request request = new http.Request('PUT', Uri.parse(uriStr),
-        headers: new http.Headers(), body: broadcast.stream);
+    http.Request tmpRequest = http.Request('PUT', uri, headers: http.Headers());
+    tmpRequest.headers.add('Content-Encoding', 'aws-chunked');
+    tmpRequest.headers.add('Content-Type', contentType);
+    tmpRequest.headers.add('Content-Length', contentLengthWithMeta);
+    tmpRequest.headers.add('x-amz-decoded-content-length', contentLength);
     if (meta != null) {
       for (MapEntry<String, String> me in meta.entries) {
-        request.headers.add("x-amz-meta-${me.key}", me.value);
+        tmpRequest.headers.add("x-amz-meta-${me.key}", me.value);
       }
     }
     if (permissions == Permissions.public) {
-      request.headers.add('x-amz-acl', 'public-read');
+      tmpRequest.headers.add('x-amz-acl', 'public-read');
     }
-    request.headers.add('Content-Length', contentLength);
-    request.headers.add('Content-Type', contentType);
-    signRequest(request, contentSha256: contentSha256);
-    http.Response response = await httpClient.send(request);
+    String canonicalRequestSignature = signFirstChunkRequest(tmpRequest);
+    http.Headers headers = tmpRequest.headers;
 
-    BytesBuilder builder = new BytesBuilder(copy: false);
-    await response.body.forEach(builder.add);
-    String body = utf8.decode(builder.toBytes()); // Should be empty when OK
-    if (response.statusCode != 200) {
-      throw new ClientException(response.statusCode, response.reasonPhrase,
-          response.headers.toSimpleMap(), body);
+    sendChunkRequest(List<int> data, int i) async {
+      http.Request request;
+      if (isFirstChunk) {
+        signature = calculateChunkedSignature(data, canonicalRequestSignature);
+        isFirstChunk = false;
+      } else {
+        signature = calculateChunkedSignature(data, signature);
+      }
+      print(data.length);
+      print('******************');
+      request = new http.Request('PUT', uri,
+          body: data.length.toRadixString(16).toString() +
+              ";chunk-signature=$signature\r\n" +
+              (data.isEmpty ? '' : data.toString()) +
+              "\r\n",
+          headers: headers);
+      try {
+        await httpClient.send(request);
+      } catch (e, s) {
+        if (i == 0) {
+          print(e);
+        }
+        print(s);
+      }
     }
-    String etag = response.headers['etag'].first;
-    return etag;
+
+    Future sendChunkRequestSync(List<int> val,
+        [Future previousChunk, int i]) async {
+      final completer = Completer();
+      if (previousChunk == null) {
+        sendChunkRequest(val, i).then((_) {
+          print('**********completed first ($i) future=========');
+          completer.complete();
+        });
+      } else {
+        previousChunk.then((_) {
+          sendChunkRequest(val, i).then((_) {
+            print('**********completed other ($i) future=========');
+
+            completer.complete();
+          });
+        });
+      }
+
+      return completer.future;
+    }
+
+    Future prevChunk;
+    Future lastChunk;
+    int i = 0;
+    fileStream.listen((val) {
+      // var utf8val = utf8.encode(val.toString());
+      // int contentLength = utf8val.length;
+      // print(contentLength);
+      // print(val.length);
+      if (val.length != chunkSize)
+        print('======ALARM======${val.length} != $chunkSize');
+      prevChunk = sendChunkRequestSync(val, prevChunk, i);
+      i++;
+    }, onDone: () {
+      print('onDone!');
+      lastChunk = sendChunkRequestSync([], prevChunk, i);
+    });
+    await lastChunk;
+    // await Future.delayed(Duration(seconds: 10));
+    print('!!!!!!!');
+    return 'ok';
   }
 
-  Future wait15sec() async {
-    await Future.delayed(Duration(seconds: 15));
-  }
+  int calculateContentLengthWithMeta(int contentLength, int chunkSize) =>
+      (chunkSize.toRadixString(16).codeUnits.length + 85) *
+          (contentLength / chunkSize).floor() +
+      (contentLength % chunkSize).toRadixString(16).codeUnits.length +
+      85 +
+      86 +
+      contentLength;
 
   /// Uploads file. Returns Etag.
   Future<String> uploadFile(
