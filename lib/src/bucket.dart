@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:meta/meta.dart';
 import 'package:crypto/crypto.dart';
 import 'package:http_client/console.dart' as http;
@@ -109,14 +110,17 @@ class Bucket extends Client {
 
   /// Uploads file. Returns Etag.
   Future<String> uploadFile(
-      String key, String filePath, String contentType, Permissions permissions,
+      String key, Uint8List content, String contentType, Permissions permissions,
       {Map<String, String> meta}) async {
-    var input = new File(filePath);
-    int contentLength = await input.length();
-    Digest contentSha256 = await sha256.bind(input.openRead()).first;
+    
+    int contentLength = content.lengthInBytes;
+
+    Digest contentSha256 = sha256.convert(content);
+
     String uriStr = endpointUrl + '/' + key;
     http.Request request = new http.Request('PUT', Uri.parse(uriStr),
-        headers: new http.Headers(), body: input.openRead());
+        headers: new http.Headers(), body: content);
+    
     if (meta != null) {
       for (MapEntry<String, String> me in meta.entries) {
         request.headers.add("x-amz-meta-${me.key}", me.value);
