@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:meta/meta.dart';
 import 'package:crypto/crypto.dart';
-import 'package:http_client/console.dart' as http;
+import 'package:http_client/console.dart' as http_client;
+import 'package:http/http.dart' as http;
 import 'package:xml/xml.dart' as xml;
 
 import 'client.dart';
@@ -23,7 +24,7 @@ class Bucket extends Client {
       @required String secretKey,
       String endpointUrl,
       this.chunkSize = 65536,
-      http.Client httpClient})
+      http_client.Client httpClient})
       : super(
             region: region,
             accessKey: accessKey,
@@ -144,14 +145,11 @@ class Bucket extends Client {
         chunkContentLengthWithMeta: contentLengthWithMeta,
         meta: meta);
     String canonicalRequestSignature =
-        (headers['Authorization'] as String).split('Signature=').last;
+        headers['Authorization'].split('Signature=').last;
 
-    HttpClient client = new HttpClient();
-    HttpClientRequest request = await client.putUrl(uri);
-
-    headers.keys.forEach((key) {
-      request.headers.add(key, headers[key]);
-    });
+    http.StreamedRequest request = http.StreamedRequest('PUT', uri);
+    request.headers.addAll(headers);
+    final futureRequest = request.send();
 
     Future<String> sendChunkRequest(List<int> data) async {
       signature = calculateChunkedSignature(
@@ -163,17 +161,19 @@ class Bucket extends Client {
       if (isFirstChunk) {
         isFirstChunk = false;
       }
-      request.write(data.length.toRadixString(16).toString());
-      request.write(";chunk-signature=$signature\r\n");
-      if (data.isNotEmpty) request.add(data);
-      request.write("\r\n");
+      request.sink.add(data.length.toRadixString(16).toString().codeUnits);
+      request.sink.add(";chunk-signature=$signature\r\n".codeUnits);
+      if (data.isNotEmpty) request.sink.add(data);
+      request.sink.add("\r\n".codeUnits);
       if (data.isEmpty) {
-        HttpClientResponse response = await request.close();
+        request.sink.close();
+        var responseStream = await futureRequest;
+        var response = await http.Response.fromStream(responseStream);
         // print(response.statusCode);
         // print(response.reasonPhrase);
         // print(response.headers);
         // print(await response.transform(utf8.decoder).first);
-        return response.headers.value(HttpHeaders.etagHeader);
+        return response.headers[HttpHeaders.etagHeader];
       }
       return '';
     }
@@ -230,8 +230,9 @@ class Bucket extends Client {
     int contentLength = await input.length();
     Digest contentSha256 = await sha256.bind(input.openRead()).first;
     String uriStr = endpointUrl + '/' + key;
-    http.Request request = new http.Request('PUT', Uri.parse(uriStr),
-        headers: new http.Headers(), body: input.readAsBytesSync());
+    http_client.Request request = new http_client.Request(
+        'PUT', Uri.parse(uriStr),
+        headers: new http_client.Headers(), body: input.readAsBytesSync());
     if (meta != null) {
       for (MapEntry<String, String> me in meta.entries) {
         request.headers.add("x-amz-meta-${me.key}", me.value);
@@ -243,7 +244,7 @@ class Bucket extends Client {
     request.headers.add('Content-Length', contentLength);
     request.headers.add('Content-Type', contentType);
     signRequest(request, contentSha256: contentSha256);
-    http.Response response = await httpClient.send(request);
+    http_client.Response response = await httpClient.send(request);
     BytesBuilder builder = new BytesBuilder(copy: false);
     await response.body.forEach(builder.add);
     String body = utf8.decode(builder.toBytes()); // Should be empty when OK
@@ -251,7 +252,6 @@ class Bucket extends Client {
       throw new ClientException(response.statusCode, response.reasonPhrase,
           response.headers.toSimpleMap(), body);
     }
-    String etag = response.headers['etag'].first;
-    return etag;
+    return response.headers[HttpHeaders.etagHeader].first;
   }
 }

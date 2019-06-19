@@ -164,7 +164,7 @@ class Client {
   }
 
   @protected
-  Map<String, dynamic> composeChunkRequestHeaders(
+  Map<String, String> composeChunkRequestHeaders(
       {Uri uri,
       String dateIso8601,
       String dateYYYYMMDD,
@@ -179,7 +179,7 @@ class Client {
 
     String credential =
         '${accessKey}/${dateYYYYMMDD}/${region}/${service}/aws4_request';
-    Map<String, dynamic> resultHeaders = {
+    Map<String, String> resultHeaders = {
       'x-amz-date': dateIso8601, // Set date in header
       'x-amz-content-sha256':
           'STREAMING-AWS4-HMAC-SHA256-PAYLOAD', // Set payload hash in header
