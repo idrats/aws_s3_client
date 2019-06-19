@@ -231,7 +231,7 @@ class Bucket extends Client {
     Digest contentSha256 = await sha256.bind(input.openRead()).first;
     String uriStr = endpointUrl + '/' + key;
     http.Request request = new http.Request('PUT', Uri.parse(uriStr),
-        headers: new http.Headers(), body: input.openRead());
+        headers: new http.Headers(), body: input.readAsBytesSync());
     if (meta != null) {
       for (MapEntry<String, String> me in meta.entries) {
         request.headers.add("x-amz-meta-${me.key}", me.value);
