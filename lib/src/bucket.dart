@@ -8,6 +8,7 @@ import 'package:xml/xml.dart' as xml;
 
 import 'client.dart';
 import 'results.dart';
+import 'stream_transformers.dart';
 
 enum Permissions {
   private,
@@ -15,11 +16,13 @@ enum Permissions {
 }
 
 class Bucket extends Client {
+  final int chunkSize;
   Bucket(
       {@required String region,
       @required String accessKey,
       @required String secretKey,
       String endpointUrl,
+      this.chunkSize = 65536,
       http.Client httpClient})
       : super(
             region: region,
@@ -40,7 +43,6 @@ class Bucket extends Client {
   }
 
   /// List the Bucket's Contents.
-  /// https://developers.digitalocean.com/documentation/spaces/#list-bucket-contents
   Stream<BucketContent> listContents(
       {String delimiter, String prefix, int maxKeys}) async* {
     bool isTruncated;
@@ -106,6 +108,119 @@ class Bucket extends Client {
       }
     } while (isTruncated);
   }
+
+  /// Uploads file stream. Returns Etag.
+  Future<String> uploadFileStream(String key, Stream<List<int>> fileStream,
+      int contentLength, Permissions permissions,
+      {Map<String, String> meta}) async {
+    bool isFirstChunk = true;
+    String signature;
+    Uri uri = Uri.parse(endpointUrl + '/' + key);
+
+    DateTime date = new DateTime.now().toUtc();
+
+    // String dateIso8601 = "20130524T000000Z";
+    String dateIso8601 = date.toIso8601String();
+    dateIso8601 = dateIso8601
+            .substring(0, dateIso8601.indexOf('.'))
+            .replaceAll(':', '')
+            .replaceAll('-', '') +
+        'Z';
+
+    // String dateYYYYMMDD = "20130524";
+    String dateYYYYMMDD = date.year.toString().padLeft(4, '0') +
+        date.month.toString().padLeft(2, '0') +
+        date.day.toString().padLeft(2, '0');
+
+    int contentLengthWithMeta =
+        calculateContentLengthWithMeta(contentLength, chunkSize);
+
+    final headers = composeChunkRequestHeaders(
+        uri: uri,
+        dateYYYYMMDD: dateYYYYMMDD,
+        dateIso8601: dateIso8601,
+        contentLength: contentLength,
+        permissions: permissions,
+        chunkContentLengthWithMeta: contentLengthWithMeta,
+        meta: meta);
+    String canonicalRequestSignature =
+        (headers['Authorization'] as String).split('Signature=').last;
+
+    HttpClient client = new HttpClient();
+    HttpClientRequest request = await client.putUrl(uri);
+
+    headers.keys.forEach((key) {
+      request.headers.add(key, headers[key]);
+    });
+
+    Future<String> sendChunkRequest(List<int> data) async {
+      signature = calculateChunkedSignature(
+        data,
+        isFirstChunk ? canonicalRequestSignature : signature,
+        dateYYYYMMDD: dateYYYYMMDD,
+        dateIso8601: dateIso8601,
+      );
+      if (isFirstChunk) {
+        isFirstChunk = false;
+      }
+      request.write(data.length.toRadixString(16).toString());
+      request.write(";chunk-signature=$signature\r\n");
+      if (data.isNotEmpty) request.add(data);
+      request.write("\r\n");
+      if (data.isEmpty) {
+        HttpClientResponse response = await request.close();
+        // print(response.statusCode);
+        // print(response.reasonPhrase);
+        // print(response.headers);
+        // print(await response.transform(utf8.decoder).first);
+        return response.headers.value(HttpHeaders.etagHeader);
+      }
+      return '';
+    }
+
+    Future<dynamic> sendChunkRequestSync(List<int> val,
+        [Future previousChunk]) async {
+      final chunkCompleter = Completer();
+      if (previousChunk == null) {
+        sendChunkRequest(val).then((String etag) {
+          chunkCompleter.complete(etag);
+        });
+      } else {
+        previousChunk.then((_) {
+          sendChunkRequest(val).then((String etag) {
+            chunkCompleter.complete(etag);
+          });
+        });
+      }
+
+      return chunkCompleter.future;
+    }
+
+    Future<dynamic> handleFileStream(Stream<List<int>> fileStream) {
+      Future prevChunk;
+
+      final completer = Completer();
+      fileStream.listen((val) {
+        prevChunk = sendChunkRequestSync(val, prevChunk);
+      }, onDone: () {
+        sendChunkRequestSync([], prevChunk).then((etag) {
+          completer.complete(etag);
+        });
+      });
+      return completer.future;
+    }
+
+    return await handleFileStream(
+        fileStream.transform(chunkedBuffer(chunkSize)));
+  }
+
+  int calculateContentLengthWithMeta(int contentLength, int chunkSize) =>
+      (chunkSize.toRadixString(16).codeUnits.length + 85) *
+          (contentLength / chunkSize).floor() +
+      (contentLength % chunkSize).toRadixString(16).codeUnits.length +
+      85 +
+      86 +
+      contentLength;
 
   /// Uploads file. Returns Etag.
   Future<String> uploadFile(
