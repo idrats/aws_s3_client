@@ -8,6 +8,7 @@ import 'package:xml/xml.dart' as xml;
 
 import 'client.dart';
 import 'results.dart';
+import 'stream_transformers.dart';
 
 enum Permissions {
   private,
@@ -15,11 +16,13 @@ enum Permissions {
 }
 
 class Bucket extends Client {
+  final int chunkSize;
   Bucket(
       {@required String region,
       @required String accessKey,
       @required String secretKey,
       String endpointUrl,
+      this.chunkSize = 65536,
       http.Client httpClient})
       : super(
             region: region,
@@ -40,7 +43,6 @@ class Bucket extends Client {
   }
 
   /// List the Bucket's Contents.
-  /// https://developers.digitalocean.com/documentation/spaces/#list-bucket-contents
   Stream<BucketContent> listContents(
       {String delimiter, String prefix, int maxKeys}) async* {
     bool isTruncated;
@@ -107,125 +109,109 @@ class Bucket extends Client {
     } while (isTruncated);
   }
 
-  int i = 0;
-
   /// Uploads file stream. Returns Etag.
   Future<String> uploadFileStream(String key, Stream<List<int>> fileStream,
-      String contentType, int contentLength, Permissions permissions,
+      int contentLength, Permissions permissions,
       {Map<String, String> meta}) async {
-    // int chunkSize = 155894;
-    int chunkSize = 65536;
     bool isFirstChunk = true;
     String signature;
     Uri uri = Uri.parse(endpointUrl + '/' + key);
+
+    DateTime date = new DateTime.now().toUtc();
+
+    // String dateIso8601 = "20130524T000000Z";
+    String dateIso8601 = date.toIso8601String();
+    dateIso8601 = dateIso8601
+            .substring(0, dateIso8601.indexOf('.'))
+            .replaceAll(':', '')
+            .replaceAll('-', '') +
+        'Z';
+
+    // String dateYYYYMMDD = "20130524";
+    String dateYYYYMMDD = date.year.toString().padLeft(4, '0') +
+        date.month.toString().padLeft(2, '0') +
+        date.day.toString().padLeft(2, '0');
+
     int contentLengthWithMeta =
         calculateContentLengthWithMeta(contentLength, chunkSize);
-    // Map<String, dynamic> headers = {
-    //   'Content-Encoding': 'aws-chunked',
-    //   'Content-Type': contentType,
-    //   'Content-Length': contentLengthWithMeta,
-    //   'x-amz-decoded-content-length': contentLength
-    // };
-    // if (meta != null) {
-    //   for (MapEntry<String, String> me in meta.entries) {
-    //     headers["x-amz-meta-${me.key}"] = me.value;
-    //   }
-    // }
-    // if (permissions == Permissions.public) {
-    //   headers['x-amz-acl'] = 'public-read';
-    // }
-    // print(headers);
-    // final signedHeaders = composeChunkRequestHeaders(headers, uri);
-    // String canonicalRequestSignature =
-    //     (headers['Authorization'] as String).split('Signature=').last;
-    // print(signedHeaders);
-    // print(canonicalRequestSignature);
 
-    http.Request tmpRequest = http.Request('PUT', uri, headers: http.Headers());
-    tmpRequest.headers.add('Content-Encoding', 'aws-chunked');
-    tmpRequest.headers.add('Content-Type', contentType);
-    tmpRequest.headers.add('Content-Length', contentLengthWithMeta);
-    tmpRequest.headers.add('x-amz-decoded-content-length', contentLength);
-    if (meta != null) {
-      for (MapEntry<String, String> me in meta.entries) {
-        tmpRequest.headers.add("x-amz-meta-${me.key}", me.value);
-      }
-    }
-    if (permissions == Permissions.public) {
-      tmpRequest.headers.add('x-amz-acl', 'public-read');
-    }
-    String canonicalRequestSignature = signFirstChunkRequest(tmpRequest);
-    http.Headers headers = tmpRequest.headers;
+    final headers = composeChunkRequestHeaders(
+        uri: uri,
+        dateYYYYMMDD: dateYYYYMMDD,
+        dateIso8601: dateIso8601,
+        contentLength: contentLength,
+        permissions: permissions,
+        chunkContentLengthWithMeta: contentLengthWithMeta,
+        meta: meta);
+    String canonicalRequestSignature =
+        (headers['Authorization'] as String).split('Signature=').last;
 
-    sendChunkRequest(List<int> data, int i) async {
-      http.Request request;
+    HttpClient client = new HttpClient();
+    HttpClientRequest request = await client.putUrl(uri);
+
+    headers.keys.forEach((key) {
+      request.headers.add(key, headers[key]);
+    });
+
+    Future<String> sendChunkRequest(List<int> data) async {
+      signature = calculateChunkedSignature(
+        data,
+        isFirstChunk ? canonicalRequestSignature : signature,
+        dateYYYYMMDD: dateYYYYMMDD,
+        dateIso8601: dateIso8601,
+      );
       if (isFirstChunk) {
-        signature = calculateChunkedSignature(data, canonicalRequestSignature);
         isFirstChunk = false;
-      } else {
-        signature = calculateChunkedSignature(data, signature);
       }
-      print(data.length);
-      print((data.length.toRadixString(16).toString() +
-              ";chunk-signature=$signature\r\n" +
-              (data.isEmpty ? '' : data.toString()) +
-              "\r\n")
-          .length);
-      print('******************');
-      request = new http.Request('PUT', uri,
-          body: data.length.toRadixString(16).toString() +
-              ";chunk-signature=$signature\r\n" +
-              (data.isEmpty ? '' : data.toString()) +
-              "\r\n",
-          headers: headers);
-      try {
-        await httpClient.send(request);
-      } catch (e, s) {
-        print(e.toString().length > 200 ? e.toString().substring(0, 200) : e);
+      request.write(data.length.toRadixString(16).toString());
+      request.write(";chunk-signature=$signature\r\n");
+      if (data.isNotEmpty) request.add(data);
+      request.write("\r\n");
+      if (data.isEmpty) {
+        HttpClientResponse response = await request.close();
+        // print(response.statusCode);
+        // print(response.reasonPhrase);
+        // print(response.headers);
+        // print(await response.transform(utf8.decoder).first);
+        return response.headers.value(HttpHeaders.etagHeader);
       }
+      return '';
     }
 
-    Future sendChunkRequestSync(List<int> val,
-        [Future previousChunk, int i]) async {
-      final completer = Completer();
+    Future<dynamic> sendChunkRequestSync(List<int> val,
+        [Future previousChunk]) async {
+      final chunkCompleter = Completer();
       if (previousChunk == null) {
-        sendChunkRequest(val, i).then((_) {
-          print('**********completed first ($i) future=========');
-          completer.complete();
+        sendChunkRequest(val).then((String etag) {
+          chunkCompleter.complete(etag);
         });
       } else {
         previousChunk.then((_) {
-          sendChunkRequest(val, i).then((_) {
-            print('**********completed other ($i) future=========');
-
-            completer.complete();
+          sendChunkRequest(val).then((String etag) {
+            chunkCompleter.complete(etag);
           });
         });
       }
 
+      return chunkCompleter.future;
+    }
+
+    Future<dynamic> handleFileStream(Stream<List<int>> fileStream) {
+      Future prevChunk;
+
+      final completer = Completer();
+      fileStream.listen((val) {
+        prevChunk = sendChunkRequestSync(val, prevChunk);
+      }, onDone: () {
+        sendChunkRequestSync([], prevChunk).then((etag) {
+          completer.complete(etag);
+        });
+      });
       return completer.future;
     }
 
-    Future prevChunk;
-    Future lastChunk;
-    int i = 0;
-    fileStream.listen((val) {
-      // var utf8val = utf8.encode(val.toString());
-      // int contentLength = utf8val.length;
-      // print(contentLength);
-      // print(val.length);
-      if (val.length != chunkSize)
-        print('======ALARM======${val.length} != $chunkSize');
-      prevChunk = sendChunkRequestSync(val, prevChunk, i);
-      i++;
-    }, onDone: () {
-      print('onDone!');
-      lastChunk = sendChunkRequestSync([], prevChunk, i);
-    });
-    await lastChunk;
-    // await Future.delayed(Duration(seconds: 10));
-    print('!!!!!!!');
-    return 'ok';
+    return await handleFileStream(
+        fileStream.transform(chunkedBuffer(chunkSize)));
   }
 
   int calculateContentLengthWithMeta(int contentLength, int chunkSize) =>
