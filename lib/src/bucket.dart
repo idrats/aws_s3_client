@@ -211,7 +211,7 @@ class Bucket extends Client {
     }
 
     return await handleFileStream(
-        fileStream.transform(chunkedBuffer(chunkSize)));
+        fileStream.transform(ChunkTransformer(chunkSize: chunkSize)));
   }
 
   int calculateContentLengthWithMeta(int contentLength, int chunkSize) =>

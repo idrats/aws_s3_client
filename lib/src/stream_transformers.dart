@@ -1,35 +1,73 @@
 import 'dart:async';
-import 'package:stream_transform/src/from_handlers.dart';
 
-/// Creates a StreamTransformer which collects values until it will exceed [chunkSize].
+/// StreamTransformer which collects values until it will exceed [chunkSize].
 /// Emits chunks of [chunkSize] except the last one, which can be smaller
-StreamTransformer<List<T>, List<T>> chunkedBuffer<T>(int chunkSize) =>
-    _chunkedAggregate(chunkSize, _collectToList);
+class ChunkTransformer implements StreamTransformer<List<int>, List<int>> {
+  int _chunkSize;
+  StreamController _controller;
+  StreamSubscription _subscription;
+  bool cancelOnError;
+  Stream<List<int>> _stream;
+  final _buffer = <int>[];
 
-List<T> _collectToList<T>(List<T> chunk, List<T> soFar) {
-  soFar ??= <T>[];
-  soFar.addAll(chunk);
-  return soFar;
-}
+  ChunkTransformer(
+      {int chunkSize: 65536, bool sync: false, this.cancelOnError}) {
+    _chunkSize = chunkSize;
+    _controller = StreamController<List<int>>(
+        onListen: _onListen,
+        onCancel: _onCancel,
+        onPause: () {
+          _subscription.pause();
+        },
+        onResume: () {
+          _subscription.resume();
+        },
+        sync: sync);
+  }
 
-StreamTransformer<List<T>, List<T>> _chunkedAggregate<T>(
-    int chunkLength, List<T> collect(List<T> chunk, List<T> soFar)) {
-  var soFar = <T>[];
-  return fromHandlers(handleData: (List<T> value, EventSink<List<T>> sink) {
-    soFar = collect(value, soFar);
+  ChunkTransformer.broadcast(
+      {int chunkSize: 65536, bool sync: false, this.cancelOnError}) {
+    _chunkSize = chunkSize;
+    _controller = new StreamController<List<int>>.broadcast(
+        onListen: _onListen, onCancel: _onCancel, sync: sync);
+  }
 
-    while (soFar.length > chunkLength) {
-      sink.add(soFar.sublist(0, chunkLength));
-      soFar.removeRange(0, chunkLength);
+  void _onListen() {
+    _subscription = _stream.listen(onData,
+        onError: _controller.addError,
+        onDone: _onDone,
+        cancelOnError: cancelOnError);
+  }
+
+  void _onCancel() {
+    _subscription.cancel();
+    _subscription = null;
+  }
+
+  void onData(List<int> data) {
+    _buffer.addAll(data);
+    _emitData();
+  }
+
+  void _onDone() {
+    if (_buffer.isNotEmpty) {
+      _controller.add(_buffer);
     }
-  }, handleDone: (EventSink<List<T>> sink) {
-    while (soFar.length > chunkLength) {
-      sink.add(soFar.sublist(0, chunkLength));
-      soFar.removeRange(0, chunkLength);
+    _controller.close();
+  }
+
+  void _emitData() {
+    if (_buffer.length >= _chunkSize) {
+      _controller.add(_buffer.sublist(0, _chunkSize));
+      _buffer.removeRange(0, _chunkSize);
+      _emitData();
     }
-    if (soFar.isNotEmpty) {
-      sink.add(soFar);
-    }
-    sink.close();
-  });
+  }
+
+  Stream<List<int>> bind(Stream<List<int>> stream) {
+    this._stream = stream;
+    return _controller.stream;
+  }
+
+  StreamTransformer<RS, RT> cast<RS, RT>() => StreamTransformer.castFrom(this);
 }
