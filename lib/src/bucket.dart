@@ -202,7 +202,6 @@ class Bucket extends Client {
 
       final completer = Completer();
       fileStream.listen((val) {
-        print(val.length);
         prevChunk = sendChunkRequestSync(val, prevChunk);
       }, onDone: () {
         sendChunkRequestSync([], prevChunk).then((etag) {
