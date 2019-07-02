@@ -112,7 +112,7 @@ class Bucket extends Client {
 
   /// Uploads file stream. Returns Etag.
   Future<String> uploadFileStream(String key, Stream<List<int>> fileStream,
-      int contentLength, Permissions permissions,
+      int contentLength, String contentType, Permissions permissions,
       {Map<String, String> meta}) async {
     bool isFirstChunk = true;
     String signature;
@@ -141,6 +141,7 @@ class Bucket extends Client {
         dateYYYYMMDD: dateYYYYMMDD,
         dateIso8601: dateIso8601,
         contentLength: contentLength,
+        contentType: contentType,
         permissions: permissions,
         chunkContentLengthWithMeta: contentLengthWithMeta,
         meta: meta);
@@ -201,6 +202,7 @@ class Bucket extends Client {
 
       final completer = Completer();
       fileStream.listen((val) {
+        print(val.length);
         prevChunk = sendChunkRequestSync(val, prevChunk);
       }, onDone: () {
         sendChunkRequestSync([], prevChunk).then((etag) {

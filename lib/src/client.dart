@@ -168,6 +168,7 @@ class Client {
       {Uri uri,
       String dateIso8601,
       String dateYYYYMMDD,
+      String contentType,
       int contentLength,
       int chunkContentLengthWithMeta,
       Permissions permissions,
@@ -184,6 +185,7 @@ class Client {
       'x-amz-content-sha256':
           'STREAMING-AWS4-HMAC-SHA256-PAYLOAD', // Set payload hash in header
       'Content-Encoding': 'aws-chunked',
+      'Content-Type': contentType,
       // 'Expect': '100-continue',
       // 'x-amz-storage-class': 'REDUCED_REDUNDANCY',
       'Content-Length': chunkContentLengthWithMeta.toString(),
