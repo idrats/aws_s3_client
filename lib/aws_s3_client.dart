@@ -1,4 +1,4 @@
-library aws_s3;
+library aws_s3_client;
 
 export 'src/exception.dart';
 export 'src/spaces.dart';
