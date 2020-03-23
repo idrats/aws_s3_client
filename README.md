@@ -1,6 +1,6 @@
 # AWS_S3_client
 
-Client library to interact with the AWS S3 API
+Client library to interact with the AWS S3 API (and other compatible S3 services, such as Yandex Cloud Storage)
 
 ## Usage
 
