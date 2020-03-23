@@ -35,12 +35,11 @@ main() async {
 }
 ```
 
+For more usage examples please see tests
+
 ## References
 
-* https://github.com/nbspou/dospace
-* https://github.com/agilord/aws_client
-* https://github.com/gjersvik/awsdart
-* https://docs.aws.amazon.com/general/latest/gr/signature-version-4.html
-* https://docs.aws.amazon.com/general/latest/gr/sigv4_signing.html
-* https://docs.aws.amazon.com/general/latest/gr/sigv4-signed-request-examples.html
-* https://docs.aws.amazon.com/general/latest/gr/signature-v4-test-suite.html
+* https://docs.aws.amazon.com/general/latest/gr/Welcome.html
+* https://cloud.yandex.ru/docs/storage/s3/api-ref/
+
+Thanks https://github.com/nbspou for inspiration of creating this package
