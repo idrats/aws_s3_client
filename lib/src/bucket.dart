@@ -173,22 +173,12 @@ class Bucket extends Client {
       return '';
     }
 
-    Future<dynamic> sendChunkRequestSync(List<int> val,
+    Future<String> sendChunkRequestSync(List<int> val,
         [Future previousChunk]) async {
-      final chunkCompleter = Completer();
-      if (previousChunk == null) {
-        sendChunkRequest(val).then((String etag) {
-          chunkCompleter.complete(etag);
-        });
-      } else {
-        previousChunk.then((_) {
-          sendChunkRequest(val).then((String etag) {
-            chunkCompleter.complete(etag);
-          });
-        });
+      if (previousChunk != null) {
+        await previousChunk;
       }
-
-      return chunkCompleter.future;
+      return sendChunkRequest(val);
     }
 
     Future<dynamic> handleFileStream(Stream<List<int>> fileStream) {
