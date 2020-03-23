@@ -13,6 +13,11 @@ class BucketContent {
   /// The size of the object in bytes.
   final int size;
 
+  @override
+  String toString() {
+    return 'key: $key\neTag: $eTag\nsize: $size\nlastModifiedUtc: $lastModifiedUtc';
+  }
+
   BucketContent({
     @required this.key,
     @required this.lastModifiedUtc,

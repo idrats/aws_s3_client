@@ -11,8 +11,7 @@ main() async {
     print('bucket: ${name}');
     if (name == 'yourBucket') {
       Bucket bucket = spaces.bucket(name);
-      await for (BucketContent content
-          in bucket.listContents(prefix: 'test')) {
+      await for (BucketContent content in bucket.listContent(prefix: 'test')) {
         print('key: ${content.key}; size: ${content.size}');
       }
     }
