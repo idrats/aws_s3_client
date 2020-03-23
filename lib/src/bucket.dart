@@ -41,7 +41,7 @@ class Bucket extends Client {
     String marker;
     do {
       Uri uri = Uri.parse(endpointUrl + '/');
-      Map<String, dynamic> params = new Map<String, dynamic>();
+      Map<String, dynamic> params = Map<String, dynamic>();
       if (delimiter != null) params['delimiter'] = delimiter;
       if (marker != null) {
         params['marker'] = marker;
@@ -89,7 +89,7 @@ class Bucket extends Client {
                     }
                   }
                 }
-                yield new BucketContent(
+                yield BucketContent(
                   key: key,
                   lastModifiedUtc: lastModifiedUtc,
                   eTag: eTag,
@@ -112,7 +112,7 @@ class Bucket extends Client {
     String signature;
     Uri uri = Uri.parse(endpointUrl + '/' + key);
 
-    DateTime date = new DateTime.now().toUtc();
+    DateTime date = DateTime.now().toUtc();
 
     // String dateIso8601 = "20130524T000000Z";
     String dateIso8601 = date.toIso8601String();
@@ -226,9 +226,8 @@ class Bucket extends Client {
     Digest contentSha256 = sha256.convert(content);
 
     String uriStr = endpointUrl + '/' + key;
-    http_client.Request request = new http_client.Request(
-        'PUT', Uri.parse(uriStr),
-        headers: new http_client.Headers(), body: content);
+    http_client.Request request = http_client.Request('PUT', Uri.parse(uriStr),
+        headers: http_client.Headers(), body: content);
 
     if (meta != null) {
       for (MapEntry<String, String> me in meta.entries) {
@@ -242,11 +241,11 @@ class Bucket extends Client {
     request.headers.add('Content-Type', contentType);
     signRequest(request, contentSha256: contentSha256);
     http_client.Response response = await httpClient.send(request);
-    BytesBuilder builder = new BytesBuilder(copy: false);
+    BytesBuilder builder = BytesBuilder(copy: false);
     await response.body.forEach(builder.add);
     String body = utf8.decode(builder.toBytes()); // Should be empty when OK
     if (response.statusCode != 200) {
-      throw new ClientException(response.statusCode, response.reasonPhrase,
+      throw ClientException(response.statusCode, response.reasonPhrase,
           response.headers.toSimpleMap(), body);
     }
     return response.headers[HttpHeaders.etagHeader].first;
@@ -255,17 +254,17 @@ class Bucket extends Client {
   /// Delete file
   Future<void> delete(String key) async {
     String uriStr = endpointUrl + '/' + key;
-    http_client.Request request = new http_client.Request(
+    http_client.Request request = http_client.Request(
         'DELETE', Uri.parse(uriStr),
-        headers: new http_client.Headers());
+        headers: http_client.Headers());
 
     signRequest(request, contentSha256: sha256.convert([]));
     http_client.Response response = await httpClient.send(request);
-    BytesBuilder builder = new BytesBuilder(copy: false);
+    BytesBuilder builder = BytesBuilder(copy: false);
     await response.body.forEach(builder.add);
     String body = utf8.decode(builder.toBytes()); // Should be empty when OK
     if (response.statusCode != 200 && response.statusCode != 204) {
-      throw new ClientException(response.statusCode, response.reasonPhrase,
+      throw ClientException(response.statusCode, response.reasonPhrase,
           response.headers.toSimpleMap(), body);
     }
   }

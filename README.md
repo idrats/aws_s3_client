@@ -10,7 +10,7 @@ A simple usage example:
 import 'package:aws_s3_client/aws_s3.dart';
 
 main() async {
-  Spaces spaces = new Spaces(
+  Spaces spaces = Spaces(
     region: "region",
     accessKey: "accessKey",
     secretKey: "secretKey",

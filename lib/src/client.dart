@@ -38,7 +38,7 @@ class Client {
       @required this.service,
       http.Client httpClient})
       : this.httpClient =
-            httpClient == null ? new http.ConsoleClient() : httpClient {
+            httpClient == null ? http.ConsoleClient() : httpClient {
     assert(this.region != null);
     assert(this.accessKey != null);
     assert(this.secretKey != null);
@@ -46,15 +46,14 @@ class Client {
 
   @protected
   Future<xml.XmlDocument> getUri(Uri uri) async {
-    http.Request request =
-        new http.Request('GET', uri, headers: new http.Headers());
+    http.Request request = http.Request('GET', uri, headers: http.Headers());
     signRequest(request, contentSha256: await sha256.convert(''.codeUnits));
     http.Response response = await httpClient.send(request);
-    BytesBuilder builder = new BytesBuilder(copy: false);
+    BytesBuilder builder = BytesBuilder(copy: false);
     await response.body.forEach(builder.add);
     String body = utf8.decode(builder.toBytes());
     if (response.statusCode != 200) {
-      throw new ClientException(response.statusCode, response.reasonPhrase,
+      throw ClientException(response.statusCode, response.reasonPhrase,
           response.headers.toSimpleMap(), body);
     }
     xml.XmlDocument doc = xml.parse(body);
@@ -84,7 +83,7 @@ class Client {
     String host = request.uri.host;
     // String service = 's3';
 
-    DateTime date = new DateTime.now().toUtc();
+    DateTime date = DateTime.now().toUtc();
     String dateIso8601 = date.toIso8601String();
     dateIso8601 = dateIso8601
             .substring(0, dateIso8601.indexOf('.'))
@@ -104,7 +103,7 @@ class Client {
     String credential =
         '${accessKey}/${dateYYYYMMDD}/${region}/${service}/aws4_request';
     // Build canonical headers string
-    Map<String, List<String>> headers = new Map<String, List<String>>();
+    Map<String, List<String>> headers = Map<String, List<String>>();
     request.headers.add('x-amz-date', dateIso8601); // Set date in header
     if (contentSha256 != null) {
       request.headers.add('x-amz-content-sha256',
@@ -122,7 +121,7 @@ class Client {
     String signedHeaders = headerNames.join(';');
 
     // Build canonical query string
-    Map<String, String> queryParameters = new Map<String, String>()
+    Map<String, String> queryParameters = Map<String, String>()
       ..addAll(request.uri.queryParameters);
     List<String> queryKeys = queryParameters.keys.toList()..sort();
     String canonicalQueryString = queryKeys
@@ -141,17 +140,17 @@ class Client {
         'AWS4-HMAC-SHA256\n${dateIso8601}\n${dateYYYYMMDD}/${region}/${service}/aws4_request\n$canonicalRequestHash';
     // print('\n>>>>>> string to sign \n' + stringToSign + '\n<<<<<<\n');
 
-    Digest dateKey = new Hmac(sha256, utf8.encode("AWS4${secretKey}"))
+    Digest dateKey = Hmac(sha256, utf8.encode("AWS4${secretKey}"))
         .convert(utf8.encode(dateYYYYMMDD));
     Digest dateRegionKey =
-        new Hmac(sha256, dateKey.bytes).convert(utf8.encode(region));
+        Hmac(sha256, dateKey.bytes).convert(utf8.encode(region));
     Digest dateRegionServiceKey =
-        new Hmac(sha256, dateRegionKey.bytes).convert(utf8.encode(service));
-    Digest signingKey = new Hmac(sha256, dateRegionServiceKey.bytes)
+        Hmac(sha256, dateRegionKey.bytes).convert(utf8.encode(service));
+    Digest signingKey = Hmac(sha256, dateRegionServiceKey.bytes)
         .convert(utf8.encode("aws4_request"));
 
     Digest signature =
-        new Hmac(sha256, signingKey.bytes).convert(utf8.encode(stringToSign));
+        Hmac(sha256, signingKey.bytes).convert(utf8.encode(stringToSign));
 
     // Set signature in header
     request.headers.add('Authorization',
@@ -198,7 +197,7 @@ class Client {
       resultHeaders['x-amz-acl'] = 'public-read';
     }
     // Build canonical headers string
-    Map<String, List<String>> headers = new Map<String, List<String>>();
+    Map<String, List<String>> headers = Map<String, List<String>>();
     resultHeaders.keys.forEach((String name) => (headers[name.toLowerCase()] =
         resultHeaders[name] is List
             ? resultHeaders[name]
@@ -213,7 +212,7 @@ class Client {
     String signedHeaders = headerNames.join(';');
 
     // Build canonical query string
-    Map<String, String> queryParameters = new Map<String, String>()
+    Map<String, String> queryParameters = Map<String, String>()
       ..addAll(uri.queryParameters);
     List<String> queryKeys = queryParameters.keys.toList()..sort();
     String canonicalQueryString = queryKeys
@@ -232,17 +231,17 @@ class Client {
         'AWS4-HMAC-SHA256\n${dateIso8601}\n${dateYYYYMMDD}/${region}/${service}/aws4_request\n$canonicalRequestHash';
     // print('\n>>>>>> string to sign \n' + stringToSign + '\n<<<<<<\n');
 
-    Digest dateKey = new Hmac(sha256, utf8.encode("AWS4${secretKey}"))
+    Digest dateKey = Hmac(sha256, utf8.encode("AWS4${secretKey}"))
         .convert(utf8.encode(dateYYYYMMDD));
     Digest dateRegionKey =
-        new Hmac(sha256, dateKey.bytes).convert(utf8.encode(region));
+        Hmac(sha256, dateKey.bytes).convert(utf8.encode(region));
     Digest dateRegionServiceKey =
-        new Hmac(sha256, dateRegionKey.bytes).convert(utf8.encode(service));
-    Digest signingKey = new Hmac(sha256, dateRegionServiceKey.bytes)
+        Hmac(sha256, dateRegionKey.bytes).convert(utf8.encode(service));
+    Digest signingKey = Hmac(sha256, dateRegionServiceKey.bytes)
         .convert(utf8.encode("aws4_request"));
 
     Digest signature =
-        new Hmac(sha256, signingKey.bytes).convert(utf8.encode(stringToSign));
+        Hmac(sha256, signingKey.bytes).convert(utf8.encode(stringToSign));
 
     // Set signature in header
     resultHeaders['Authorization'] =
@@ -261,17 +260,17 @@ class Client {
         'AWS4-HMAC-SHA256-PAYLOAD\n${dateIso8601}\n${dateYYYYMMDD}/${region}/${service}/aws4_request\n$prevSignature\n${sha256.convert([])}\n${sha256.convert(data)}';
     // print('\n>>>>>> chunk string to sign \n' + stringToSign + '\n<<<<<<\n');
 
-    Digest dateKey = new Hmac(sha256, utf8.encode("AWS4${secretKey}"))
+    Digest dateKey = Hmac(sha256, utf8.encode("AWS4${secretKey}"))
         .convert(utf8.encode(dateYYYYMMDD));
     Digest dateRegionKey =
-        new Hmac(sha256, dateKey.bytes).convert(utf8.encode(region));
+        Hmac(sha256, dateKey.bytes).convert(utf8.encode(region));
     Digest dateRegionServiceKey =
-        new Hmac(sha256, dateRegionKey.bytes).convert(utf8.encode(service));
-    Digest signingKey = new Hmac(sha256, dateRegionServiceKey.bytes)
+        Hmac(sha256, dateRegionKey.bytes).convert(utf8.encode(service));
+    Digest signingKey = Hmac(sha256, dateRegionServiceKey.bytes)
         .convert(utf8.encode("aws4_request"));
 
     Digest signature =
-        new Hmac(sha256, signingKey.bytes).convert(utf8.encode(stringToSign));
+        Hmac(sha256, signingKey.bytes).convert(utf8.encode(stringToSign));
 
     return '$signature';
   }

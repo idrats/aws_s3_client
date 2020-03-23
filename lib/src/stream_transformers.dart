@@ -13,7 +13,9 @@ class ChunkTransformer implements StreamTransformer<List<int>, List<int>> {
   final _buffer = <int>[];
 
   ChunkTransformer(
-      {int chunkSize: defaultChunkSize, bool sync: false, this.cancelOnError}) {
+      {int chunkSize = defaultChunkSize,
+      bool sync = false,
+      this.cancelOnError}) {
     _chunkSize = chunkSize;
     _controller = StreamController<List<int>>(
         onListen: _onListen,
@@ -28,9 +30,11 @@ class ChunkTransformer implements StreamTransformer<List<int>, List<int>> {
   }
 
   ChunkTransformer.broadcast(
-      {int chunkSize: defaultChunkSize, bool sync: false, this.cancelOnError}) {
+      {int chunkSize = defaultChunkSize,
+      bool sync = false,
+      this.cancelOnError}) {
     _chunkSize = chunkSize;
-    _controller = new StreamController<List<int>>.broadcast(
+    _controller = StreamController<List<int>>.broadcast(
         onListen: _onListen, onCancel: _onCancel, sync: sync);
   }
 

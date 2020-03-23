@@ -39,7 +39,7 @@ class Spaces extends Client {
         throw Exception(
             "Endpoint URL not supported. Create Bucket client manually.");
     }
-    return new Bucket(
+    return Bucket(
         region: region,
         accessKey: accessKey,
         secretKey: secretKey,
@@ -49,7 +49,7 @@ class Spaces extends Client {
 
   Future<List<String>> listAllBuckets() async {
     xml.XmlDocument doc = await getUri(Uri.parse(_endpointUrl + '/'));
-    List<String> res = new List<String>();
+    List<String> res = List<String>();
     for (xml.XmlElement root in doc.findElements('ListAllMyBucketsResult')) {
       for (xml.XmlElement buckets in root.findElements('Buckets')) {
         for (xml.XmlElement bucket in buckets.findElements('Bucket')) {

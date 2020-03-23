@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:aws_s3_client/aws_s3_client.dart';
 
 main() async {
-  Spaces spaces = new Spaces(
+  Spaces spaces = Spaces(
     region: "region",
     accessKey: "accessKey",
     secretKey: "secretKey",
@@ -18,7 +18,7 @@ main() async {
   }
   Bucket bucket = spaces.bucket('yourBucket');
 
-  File file = new File('README.md');
+  File file = File('README.md');
 
   String etag = await bucket.uploadFile(
       'test/test.md', file.readAsBytesSync(), 'text/plain', Permissions.public);
