@@ -26,6 +26,7 @@ class Client {
   final String region;
   final String accessKey;
   final String secretKey;
+  final String sessionToken;
   final String service;
 
   @protected
@@ -36,6 +37,7 @@ class Client {
       @required this.accessKey,
       @required this.secretKey,
       @required this.service,
+      this.sessionToken,
       http.Client httpClient})
       : this.httpClient =
             httpClient == null ? http.ConsoleClient() : httpClient {

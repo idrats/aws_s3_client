@@ -25,6 +25,7 @@ class Bucket extends Client {
       @required String accessKey,
       @required String secretKey,
       @required this.endpointUrl,
+      String sessionToken,
       this.chunkSize = defaultChunkSize,
       http_client.Client httpClient})
       : super(
@@ -32,6 +33,7 @@ class Bucket extends Client {
             accessKey: accessKey,
             secretKey: secretKey,
             service: "s3",
+            sessionToken: sessionToken,
             httpClient: httpClient);
 
   /// List the Bucket's Content
@@ -224,6 +226,11 @@ class Bucket extends Client {
         request.headers.add("x-amz-meta-${me.key}", me.value);
       }
     }
+
+    if (sessionToken != null) {
+      request.headers.add('x-amz-security-token', sessionToken);
+    }
+
     if (permissions == Permissions.public) {
       request.headers.add('x-amz-acl', 'public-read');
     }
