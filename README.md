@@ -20,7 +20,7 @@ main() async {
     if (name == 'yourBucket') {
       Bucket bucket = spaces.bucket(name);
       await for (BucketContent content
-          in bucket.listContents(prefix: 'test')) {
+          in bucket.listContent(prefix: 'test')) {
         print('key: ${content.key}; size: ${content.size}');
       }
     }
