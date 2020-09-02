@@ -18,12 +18,14 @@ class Spaces extends Client {
       {@required String region,
       @required String accessKey,
       @required String secretKey,
+      String sessionToken,
       http.Client httpClient,
       this.provider = Provider.amazon})
       : super(
             region: region,
             accessKey: accessKey,
             secretKey: secretKey,
+            sessionToken: sessionToken,
             service: "s3",
             httpClient: httpClient);
 
@@ -44,6 +46,7 @@ class Spaces extends Client {
         accessKey: accessKey,
         secretKey: secretKey,
         endpointUrl: "$_endpointUrl/${bucket}",
+        sessionToken: sessionToken,
         httpClient: httpClient);
   }
 
