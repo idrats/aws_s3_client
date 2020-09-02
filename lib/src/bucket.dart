@@ -46,7 +46,7 @@ class Bucket extends Client {
   /// List the Bucket's Contents.
   Stream<BucketContent> listContents(
       {String delimiter, String prefix, int maxKeys}) async* {
-    bool isTruncated;
+    bool isTruncated = false;
     String marker;
     do {
       Uri uri = Uri.parse(endpointUrl + '/');
