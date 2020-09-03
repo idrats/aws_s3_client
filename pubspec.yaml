@@ -1,6 +1,6 @@
 name: aws_s3_client
 description: Client library to interact with the AWS S3 API (and other compatible S3 services, as Yandex Cloud Storage)
-version: 0.1.1
+version: 0.2.0
 homepage: https://github.com/idrats/aws_s3_client
 
 environment:

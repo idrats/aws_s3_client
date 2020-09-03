@@ -119,11 +119,7 @@ packages:
       name: http
       url: "https://pub.dartlang.org"
     source: hosted
-<<<<<<< Updated upstream
     version: "0.12.2"
-=======
-    version: "0.12.0+2"
->>>>>>> Stashed changes
   http_client:
     dependency: "direct main"
     description:
@@ -221,20 +217,8 @@ packages:
       name: path
       url: "https://pub.dartlang.org"
     source: hosted
-<<<<<<< Updated upstream
     version: "1.7.0"
   pedantic:
-=======
-    version: "1.6.2"
-  pedantic:
-    dependency: transitive
-    description:
-      name: pedantic
-      url: "https://pub.dartlang.org"
-    source: hosted
-    version: "1.7.0"
-  petitparser:
->>>>>>> Stashed changes
     dependency: transitive
     description:
       name: pedantic
