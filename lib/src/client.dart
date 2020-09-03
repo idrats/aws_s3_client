@@ -58,7 +58,7 @@ class Client {
       throw ClientException(response.statusCode, response.reasonPhrase,
           response.headers.toSimpleMap(), body);
     }
-    xml.XmlDocument doc = xml.parse(body);
+    xml.XmlDocument doc = xml.XmlDocument.parse(body);
     return doc;
   }
 
