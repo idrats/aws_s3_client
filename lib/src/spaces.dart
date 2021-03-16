@@ -52,7 +52,7 @@ class Spaces extends Client {
 
   Future<List<String>> listAllBuckets() async {
     xml.XmlDocument doc = await getUri(Uri.parse(_endpointUrl + '/'));
-    List<String> res = List<String>();
+    List<String> res = <String>[];
     for (xml.XmlElement root in doc.findElements('ListAllMyBucketsResult')) {
       for (xml.XmlElement buckets in root.findElements('Buckets')) {
         for (xml.XmlElement bucket in buckets.findElements('Bucket')) {
