@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:meta/meta.dart';
 import 'package:http_client/console.dart' as http;
 import 'package:xml/xml.dart' as xml;
 
@@ -13,13 +12,13 @@ enum Provider {
 
 class Spaces extends Client {
   final Provider provider;
-  String _endpointUrl;
+  late String _endpointUrl;
   Spaces(
-      {@required String region,
-      @required String accessKey,
-      @required String secretKey,
-      String sessionToken,
-      http.Client httpClient,
+      {required String region,
+      required String accessKey,
+      required String secretKey,
+      String? sessionToken,
+      http.Client? httpClient,
       this.provider = Provider.amazon})
       : super(
             region: region,

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:meta/meta.dart';
 import 'package:crypto/crypto.dart';
 import 'package:http_client/console.dart' as http_client;
 import 'package:http/http.dart' as http;
@@ -21,13 +20,13 @@ class Bucket extends Client {
   final int chunkSize;
   final String endpointUrl;
   Bucket(
-      {@required String region,
-      @required String accessKey,
-      @required String secretKey,
-      @required this.endpointUrl,
-      String sessionToken,
+      {required String region,
+      required String accessKey,
+      required String secretKey,
+      required this.endpointUrl,
+      String? sessionToken,
       this.chunkSize = defaultChunkSize,
-      http_client.Client httpClient})
+      http_client.Client? httpClient})
       : super(
             region: region,
             accessKey: accessKey,
@@ -38,9 +37,9 @@ class Bucket extends Client {
 
   /// List the Bucket's Content
   Stream<BucketContent> listContent(
-      {String delimiter, String prefix, int maxKeys}) async* {
-    bool isTruncated;
-    String marker;
+      {String? delimiter, String? prefix, int? maxKeys}) async* {
+    late bool isTruncated;
+    String? marker;
     do {
       Uri uri = Uri.parse(endpointUrl + '/');
       Map<String, dynamic> params = Map<String, dynamic>();
@@ -53,7 +52,7 @@ class Bucket extends Client {
       if (prefix != null) params['prefix'] = prefix;
       uri = uri.replace(queryParameters: params);
       xml.XmlDocument doc = await getUri(uri);
-      String lastKey;
+      String? lastKey;
       for (xml.XmlElement root in doc.findElements('ListBucketResult')) {
         for (xml.XmlNode node in root.children) {
           if (node is xml.XmlElement) {
@@ -67,10 +66,10 @@ class Bucket extends Client {
                     element.text != "0";
                 break;
               case "Contents":
-                String key;
-                DateTime lastModifiedUtc;
-                String eTag;
-                int size;
+                late String key;
+                late DateTime lastModifiedUtc;
+                late String eTag;
+                late int size;
                 for (xml.XmlNode node in element.children) {
                   if (node is xml.XmlElement) {
                     xml.XmlElement element = node;
@@ -109,9 +108,10 @@ class Bucket extends Client {
   /// Uploads file stream. Returns Etag.
   Future<String> uploadFileStream(String key, Stream<List<int>> fileStream,
       int contentLength, String contentType, Permissions permissions,
-      {Map<String, String> meta}) async {
+      {Map<String, String>? meta}) async {
     bool isFirstChunk = true;
     String signature;
+    String? prevSignature;
     Uri uri = Uri.parse(endpointUrl + '/' + key);
 
     DateTime date = DateTime.now().toUtc();
@@ -142,7 +142,8 @@ class Bucket extends Client {
         chunkContentLengthWithMeta: contentLengthWithMeta,
         meta: meta);
     String canonicalRequestSignature =
-        headers['Authorization'].split('Signature=').last;
+        headers['Authorization']!.split('Signature=').last;
+    prevSignature = null;
 
     http.StreamedRequest request = http.StreamedRequest('PUT', uri);
     request.headers.addAll(headers);
@@ -151,7 +152,7 @@ class Bucket extends Client {
     Future<String> sendChunkRequest(List<int> data) async {
       signature = calculateChunkedSignature(
         data,
-        isFirstChunk ? canonicalRequestSignature : signature,
+        isFirstChunk ? canonicalRequestSignature : prevSignature!,
         dateYYYYMMDD: dateYYYYMMDD,
         dateIso8601: dateIso8601,
       );
@@ -170,13 +171,14 @@ class Bucket extends Client {
         // print(response.reasonPhrase);
         // print(response.headers);
         // print(await response.transform(utf8.decoder).first);
-        return response.headers[HttpHeaders.etagHeader];
+        return response.headers[HttpHeaders.etagHeader]!;
       }
+      prevSignature = signature;
       return '';
     }
 
     Future<String> sendChunkRequestSync(List<int> val,
-        [Future previousChunk]) async {
+        [Future? previousChunk]) async {
       if (previousChunk != null) {
         await previousChunk;
       }
@@ -184,7 +186,7 @@ class Bucket extends Client {
     }
 
     Future<dynamic> handleFileStream(Stream<List<int>> fileStream) {
-      Future prevChunk;
+      late Future prevChunk;
 
       final completer = Completer();
       fileStream.listen((val) {
@@ -197,8 +199,9 @@ class Bucket extends Client {
       return completer.future;
     }
 
-    return await handleFileStream(
-        fileStream.transform(ChunkTransformer(chunkSize: chunkSize)));
+    return await (handleFileStream(
+            fileStream.transform(ChunkTransformer(chunkSize: chunkSize)))
+        as FutureOr<String>);
   }
 
   int calculateContentLengthWithMeta(int contentLength, int chunkSize) =>
@@ -212,7 +215,7 @@ class Bucket extends Client {
   /// Upload file. Return Etag.
   Future<String> uploadFile(String key, Uint8List content, String contentType,
       Permissions permissions,
-      {Map<String, String> meta}) async {
+      {Map<String, String>? meta}) async {
     int contentLength = content.lengthInBytes;
 
     Digest contentSha256 = sha256.convert(content);
@@ -245,7 +248,7 @@ class Bucket extends Client {
       throw ClientException(response.statusCode, response.reasonPhrase,
           response.headers.toSimpleMap(), body);
     }
-    return response.headers[HttpHeaders.etagHeader].first;
+    return response.headers[HttpHeaders.etagHeader]!.first;
   }
 
   /// Delete file
