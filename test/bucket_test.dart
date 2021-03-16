@@ -29,11 +29,11 @@ void main() {
     final file2 = File('test/earth.jpeg');
     final keys = ['squirrel.jpeg', 'earth.jpeg'];
     await bucket.uploadFile(pathInfo.basename(file.path),
-        file.readAsBytesSync(), lookupMimeType(file.path), Permissions.public);
+        file.readAsBytesSync(), lookupMimeType(file.path)!, Permissions.public);
     await bucket.uploadFile(
         pathInfo.basename(file2.path),
         file2.readAsBytesSync(),
-        lookupMimeType(file2.path),
+        lookupMimeType(file2.path)!,
         Permissions.public);
 
     var content = await bucket.listContent().toList();
@@ -56,7 +56,7 @@ void main() {
   test('upload file to bucket', () async {
     final file = File('test/squirrel.jpeg');
     final eTag = await bucket.uploadFile(pathInfo.basename(file.path),
-        file.readAsBytesSync(), lookupMimeType(file.path), Permissions.public);
+        file.readAsBytesSync(), lookupMimeType(file.path)!, Permissions.public);
     expect(eTag, isNotEmpty);
 
     final content = await bucket.listContent(prefix: 'squirrel').toList();
@@ -68,7 +68,7 @@ void main() {
   test('Delete file', () async {
     final file = File('test/squirrel.jpeg');
     await bucket.uploadFile(pathInfo.basename(file.path),
-        file.readAsBytesSync(), lookupMimeType(file.path), Permissions.public);
+        file.readAsBytesSync(), lookupMimeType(file.path)!, Permissions.public);
 
     var content = await bucket.listContent(prefix: 'squirrel').toList();
     expect(content.length, 1);
@@ -83,7 +83,7 @@ void main() {
         pathInfo.basename(file.path),
         file.openRead(),
         file.lengthSync(),
-        lookupMimeType(file.path),
+        lookupMimeType(file.path)!,
         Permissions.public);
     expect(eTag, isNotEmpty);
 
